@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en" class="tui-bg-green-white">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>news</title>
+
+    <!-- <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script> -->
+    <!-- <link rel="stylesheet" href="https://unpkg.com/tuicss" />
+    <script src="https://unpkg.com/tuicss/dist/tuicss.min.js"></script> -->
+    <link rel="stylesheet" href="https://unpkg.com/sakura.css/css/normalize.css" type="text/css">
+    <link rel="stylesheet" href="https://unpkg.com/sakura.css/css/sakura-ink.css" media="screen" />
+    <link rel="stylesheet" href="https://unpkg.com/sakura.css/css/sakura-dark.css"
+        media="screen and (prefers-color-scheme: dark)" />
+    <script src="https://unpkg.com/showdown/dist/showdown.min.js" defer></script>
+    <script src="https://unpkg.com/alpinejs/dist/cdn.min.js" defer></script>
+    <script src="https://unpkg.com/dayjs"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Domine:wght@400..700&family=Lora:ital,wght@0,400..700;1,400..700&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&display=swap');
+
+        html {
+            font-family: Domine;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
+            font-family: Lora;
+        }
+    </style>
+</head>
+
+<body>
+    <div x-data="{timeUntilNext: dayjs().hour()/24*100,
+    until8: (dayjs().isBefore(dayjs().hour(8).minute(0).second(0).millisecond(0)) ? dayjs().hour(8).minute(0).second(0).millisecond(0) : dayjs().hour(8).minute(0).second(0).millisecond(0).add(1, 'day')).diff(dayjs(), 'hour', true),
+    }">
+        Next update in less than <span x-text="Math.ceil(until8)"></span> hours
+    </div>
+    <main class="container mx-auto bg-green-500" x-data="{
+        data: [],
+        init() {
+            fetch('https://wood.arsaba.dev/api/collections/news_summaries/records?sort=-created')
+            .then((response) => {
+                return response.json()
+            }).then((data) => {
+                this.data = data.items
+            })
+        },
+        converter:()=> new showdown.Converter(),
+    }" x-init="init()">
+        <h1>news summaries</h1>
+
+        <template x-for="(item, idx) in data" :key="item.id">
+            <article class="tui-window" x-data="{ date: dayjs(item.created) }">
+                <fieldset class="tui-fieldset">
+                    <legend class="tui-legend">Summary for <b x-text="date.format('YYYY-MM-DD HH:mm:ss')"></b></legend>
+                    <div x-html="converter().makeHtml(item.content)"></div>
+                </fieldset>
+                <!-- <h2>The briefing at <i x-text="date.format('YYYY-MM-DD HH:mm:ss')"></i></h2>
+                <div class="tui-fieldset" x-html="converter().makeHtml(item.content)"></div> -->
+                <!-- <hr /> -->
+            </article>
+        </template>
+    </main>
+</body>
+
+</html>
