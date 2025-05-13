@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World News Map</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <!-- Marker Cluster CSS -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Domine:wght@400..700&family=Lora:ital,wght@0,400..700;1,400..700&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/showdown/dist/showdown.min.js" defer></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        #container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: row;
+            position: relative;
+        }
+
+        #map {
+            /* width: 100%; */
+            flex-grow: 1;
+            height: 100vh;
+        }
+
+        #side {
+            max-width: 30vw;
+            padding: 0.4rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            background-color: #322;
+            color: #f0f0f0;
+        }
+
+        #side p {
+            margin: 0;
+            padding: 0;
+            font-size: 14px;
+            /* color: #333; */
+        }
+
+        #side a {
+            color: #9090c0;
+            text-decoration: none;
+        }
+
+        .leaflet-popup-content-wrapper {
+            z-index: 50;
+            background-color: #333;
+            color: #f0f0f0;
+        }
+
+        .news-popup {
+            /* max-width: 300px; */
+        }
+
+        .news-popup a {
+            color: #9090c0;
+            text-decoration: none;
+        }
+
+        .news-title {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 10px;
+            /* color: #333; */
+            font-family: Lora;
+        }
+
+        .news-summary {
+            font-size: 14px;
+            /* color: #222; */
+            margin-bottom: 0.2rem;
+            font-family: Domine;
+        }
+
+        .news-meta {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 20px;
+            color: #666;
+        }
+
+        .error {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div id="map"></div>
+        <div id="side">
+
+        </div>
+    </div>
+    <div id="loading" class="loading">Loading news data...</div>
+
+    <!-- Leaflet JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <!-- Marker Cluster JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+
+    <script>
+        // Configuration
+        const NEWS_API_URL = 'https://wood.arsaba.dev/api/collections/newsmap/records?perPage=50&sort=-updated&fields=id,link,title,content_date,location,summary,geojson,created,updated&filter=geojson!=null';
+
+        // Initialize the map
+        const map = L.map('map').setView([20, 0], 2);
+
+        // Add tile layer (OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Create marker cluster group
+        const markerClusterGroup = L.markerClusterGroup({
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: true,
+            zoomToBoundsOnClick: true
+        });
+
+        // Custom icon for news markers
+        const newsIcon = L.icon({
+            iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+            iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        // Function to create popup content
+        function createPopupContent(news) {
+            const date = new Date(news.content_date).toLocaleDateString();
+            return `
+                <div class="news-popup">
+                    <div class="news-title"><a href="https://reuters.com${news.link}" target="_blank">${news.title}</a></div>
+                    <div class="news-summary">${news.summary}</div>
+                    <div class="news-meta">
+                        <strong>Date:</strong> ${date}<br>
+                        <strong>Location:</strong> ${news.location}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Function to add news marker to cluster group
+        function addNewsMarker(news) {
+            try {
+                // Parse geojson
+                const geoData = typeof news.geojson === 'string' ? JSON.parse(news.geojson) : news.geojson;
+                let marker;
+
+                if (geoData.type === 'Point') {
+                    // For Point geometry
+                    const [lng, lat] = geoData.coordinates;
+                    marker = L.marker([lat, lng], { icon: newsIcon })
+                        .bindPopup(createPopupContent(news), { maxWidth: 600 });
+                    markerClusterGroup.addLayer(marker);
+                } else if (geoData.type === 'Feature' && geoData.geometry.type === 'Point') {
+                    // For Feature with Point geometry
+                    const [lng, lat] = geoData.geometry.coordinates;
+                    marker = L.marker([lat, lng], { icon: newsIcon })
+                        .bindPopup(createPopupContent(news), { maxWidth: 600 });
+                    markerClusterGroup.addLayer(marker);
+                } else if (geoData.type === 'Polygon' || (geoData.type === 'Feature' && geoData.geometry.type === 'Polygon')) {
+                    // For Polygon geometry - add marker at centroid
+                    const layer = L.geoJSON(geoData);
+                    const bounds = layer.getBounds();
+                    const center = bounds.getCenter();
+
+                    marker = L.marker([center.lat, center.lng], { icon: newsIcon })
+                        .bindPopup(createPopupContent(news), { maxWidth: 600 });
+                    markerClusterGroup.addLayer(marker);
+
+                    // Optionally, also add the polygon shape
+                    layer.setStyle({
+                        fillColor: '#ff7800',
+                        weight: 2,
+                        opacity: 0.7,
+                        color: 'white',
+                        fillOpacity: 0.3
+                    }).addTo(map);
+                }
+            } catch (error) {
+                console.error('Error parsing geojson for news item:', news.title, error);
+            }
+        }
+
+        // Function to fetch and display news
+        async function loadNews() {
+            const loadingElement = document.getElementById('loading');
+
+            try {
+
+                const response = await fetch(NEWS_API_URL);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const newsData = await response.json();
+
+                // Hide loading indicator
+                loadingElement.style.display = 'none';
+
+                // Add markers for each news item
+                newsData.items.forEach(news => addNewsMarker(news));
+                const converter = new showdown.Converter({ simpleLineBreaks: true });
+                newsData.items.forEach(news => {
+                    const date = new Date(news.content_date).toLocaleDateString();
+                    const newsElement = document.createElement('div');
+                    newsElement.className = 'side-news';
+                    newsElement.innerHTML = `
+                        <div class="news-title"><a href="https://reuters.com${news.link}" target="_blank">${news.title}</a></div>
+                        <div class="news-summary">${converter.makeHtml(news.summary)}</div>
+                        <div class="news-meta">
+                            <strong>Date:</strong> ${date}<br>
+                            <strong>Location:</strong> ${news.location}
+                        </div>
+                    `;
+                    document.getElementById('side').appendChild(newsElement);
+                });
+
+
+                // Add the cluster group to the map
+                map.addLayer(markerClusterGroup);
+
+            } catch (error) {
+                console.error('Error loading news:', error);
+                loadingElement.style.display = 'none';
+
+                // Show error message
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error';
+                errorDiv.textContent = 'Failed to load news data. Please try again later.';
+                document.body.appendChild(errorDiv);
+
+                // Remove error message after 5 seconds
+                setTimeout(() => {
+                    errorDiv.remove();
+                }, 5000);
+            }
+        }
+
+        // Load news when page loads
+        window.addEventListener('load', loadNews);
+    </script>
+</body>
+
+</html>

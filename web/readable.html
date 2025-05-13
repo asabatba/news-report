@@ -53,7 +53,7 @@
                 this.data = data.items
             })
         },
-        converter:()=> new showdown.Converter(),
+        converter:()=> new showdown.Converter({ simpleLineBreaks: true }),
     }" x-init="init()">
         <h1>news summaries</h1>
 
