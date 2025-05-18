@@ -27,6 +27,8 @@
     <!-- Showdown for markdown -->
     <script src="https://unpkg.com/showdown/dist/showdown.min.js"></script>
 
+    <script src="https://unpkg.com/fzf"></script>
+
     <!-- Leaflet JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <!-- Marker Cluster JS -->
@@ -212,8 +214,7 @@
         <div id="map" x-ref="map"></div>
         <div id="side">
             <div class="filter-section">
-                <input type="text" placeholder="Filter by topic" x-model="topicFilter"
-                    @input.debounce.500ms="setTopicFilter(topicFilter)" />
+                <input type="text" placeholder="Search" x-model="searchString" @input.debounce.500ms="doSearch()" />
 
                 <div x-show="selectedNewsIds.length > 0" class="selection-info">
                     <span x-text="selectedNewsIds.length"></span> articles selected
@@ -285,6 +286,8 @@
                 newsItems: [],
                 topicFilter: '',
                 selectedNewsIds: [],
+                search: null,
+                searchString: '',
                 loading: true,
                 error: '',
                 map: null,
@@ -295,11 +298,21 @@
 
                 // Computed property for filtered news
                 get filteredNews() {
-                    return this.newsItems.filter(n =>
-                        !this.topicFilter ||
-                        !n.topics ||
-                        n.topics.map(t => t.toLowerCase()).includes(this.topicFilter.toLowerCase())
-                    );
+
+                    return this.searchString
+                        ? this.search.find(this.searchString).map(result => result.item)
+                        : this.newsItems;
+                    // return this.newsItems.filter(n =>
+                    //     !this.topicFilter ||
+                    //     !n.topics ||
+                    //     n.topics.map(t => t.toLowerCase()).includes(this.topicFilter.toLowerCase())
+                    // );
+                },
+
+                doSearch() {
+                    if (this.search) {
+                        this.searchString = this.searchString.trim();
+                    }
                 },
 
                 init() {
@@ -357,6 +370,11 @@
 
                         const data = await response.json();
                         this.newsItems = data.items;
+
+                        this.search = new fzf.Fzf(this.newsItems, {
+                            selector: (item) => `${item.title} (${item.topics.join(', ')}) ${item.summary} ${item.location}`,
+                            // sortBy: (a, b) => a.title.localeCompare(b.title)
+                        });
 
                         // Add markers for each news item
                         this.newsItems.forEach(news => this.addNewsMarker(news));
