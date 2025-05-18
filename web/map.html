@@ -121,17 +121,6 @@
             text-decoration: none;
         }
 
-        .leaflet-popup-content-wrapper {
-            z-index: 50;
-            background-color: #333;
-            color: #f0f0f0;
-        }
-
-        .news-popup a {
-            color: #9090c0;
-            text-decoration: none;
-        }
-
         .news-title {
             font-weight: bold;
             font-size: 16px;
@@ -179,6 +168,42 @@
         .side-news:last-child {
             border-bottom: none;
         }
+
+        /* New styles for highlighting selected articles */
+        .side-news.selected {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid #9090c0;
+            padding-left: 0.5rem;
+        }
+
+        .filter-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .clear-selection {
+            background-color: #433;
+            color: #f0f0f0;
+            border: none;
+            padding: 0.3rem 0.6rem;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-top: 0.5rem;
+        }
+
+        .clear-selection:hover {
+            background-color: #544;
+        }
+
+        .selection-info {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 0.5rem;
+        }
     </style>
 </head>
 
@@ -186,29 +211,60 @@
     <div id="container" x-data="newsMap()" x-init="init()">
         <div id="map" x-ref="map"></div>
         <div id="side">
-            <input type="text" placeholder="Filter by topic" x-model="topicFilter"
-                @input.debounce.500ms="setTopicFilter(topicFilter)" />
-            <template
-                x-for="news in newsItems.filter(n=>!topicFilter || !n.topics || n.topics.map(t=>t.toLowerCase()).includes(topicFilter.toLowerCase()))"
-                :key="news.id">
-                <div class="side-news">
-                    <div class="news-title">
-                        <a :href="`https://reuters.com${news.link}`" target="_blank" x-text="news.title"></a>
-                    </div>
-                    <div class="news-summary" x-html="formatSummary(news.summary)"></div>
-                    <div class="news-meta">
-                        <template x-if="news.topics">
-                            <div>
-                                <strong>Topics:</strong> <template x-for="topic in news.topics">
-                                    <button x-text="topic" x-on:click="setTopicFilter(topic)"></button>
-                                </template>
-                            </div>
-                        </template>
-                        <br>
-                        <strong>Date:</strong> <span x-text="formatDate(news.content_date)"></span><br>
-                        <strong>Location:</strong> <span x-text="news.location"></span>
-                    </div>
+            <div class="filter-section">
+                <input type="text" placeholder="Filter by topic" x-model="topicFilter"
+                    @input.debounce.500ms="setTopicFilter(topicFilter)" />
+
+                <div x-show="selectedNewsIds.length > 0" class="selection-info">
+                    <span x-text="selectedNewsIds.length"></span> articles selected
+                    <button class="clear-selection" @click="clearSelection()">Clear Selection</button>
                 </div>
+            </div>
+
+            <template x-if="selectedNewsIds.length > 0">
+                <template x-for="news in filteredNews.filter(n => selectedNewsIds.includes(n.id))" :key="news.id">
+                    <div class="side-news selected">
+                        <div class="news-title">
+                            <a :href="`https://reuters.com${news.link}`" target="_blank" x-text="news.title"></a>
+                        </div>
+                        <div class="news-summary" x-html="formatSummary(news.summary)"></div>
+                        <div class="news-meta">
+                            <template x-if="news.topics">
+                                <div>
+                                    <strong>Topics:</strong> <template x-for="topic in news.topics">
+                                        <button x-text="topic" x-on:click="setTopicFilter(topic)"></button>
+                                    </template>
+                                </div>
+                            </template>
+                            <br>
+                            <strong>Date:</strong> <span x-text="formatDate(news.content_date)"></span><br>
+                            <strong>Location:</strong> <span x-text="news.location"></span>
+                        </div>
+                    </div>
+                </template>
+            </template>
+
+            <template x-if="selectedNewsIds.length === 0">
+                <template x-for="news in filteredNews" :key="news.id">
+                    <div class="side-news">
+                        <div class="news-title">
+                            <a :href="`https://reuters.com${news.link}`" target="_blank" x-text="news.title"></a>
+                        </div>
+                        <div class="news-summary" x-html="formatSummary(news.summary)"></div>
+                        <div class="news-meta">
+                            <template x-if="news.topics">
+                                <div>
+                                    <strong>Topics:</strong> <template x-for="topic in news.topics">
+                                        <button x-text="topic" x-on:click="setTopicFilter(topic)"></button>
+                                    </template>
+                                </div>
+                            </template>
+                            <br>
+                            <strong>Date:</strong> <span x-text="formatDate(news.content_date)"></span><br>
+                            <strong>Location:</strong> <span x-text="news.location"></span>
+                        </div>
+                    </div>
+                </template>
             </template>
         </div>
 
@@ -221,31 +277,44 @@
 
 
     <script>
+        // Initialize the Showdown converter once
+        const converter = new showdown.Converter({ simpleLineBreaks: true });
+
         document.addEventListener('alpine:init', () => {
             Alpine.data('newsMap', () => ({
                 newsItems: [],
                 topicFilter: '',
-                setTopicFilter(topic) {
-                    this.topicFilter = topic;
-                },
+                selectedNewsIds: [],
                 loading: true,
                 error: '',
                 map: null,
                 markerClusterGroup: null,
-                converter: null,
+                converter: converter, // Use the pre-initialized converter
+                newsMarkers: {}, // Store references to markers by news ID
                 newsApiUrl: 'https://wood.arsaba.dev/api/collections/newsmap/records?perPage=50&sort=-created&fields=id,link,title,content_date,location,summary,geojson,topics,created,updated&filter=geojson!=null',
 
+                // Computed property for filtered news
+                get filteredNews() {
+                    return this.newsItems.filter(n =>
+                        !this.topicFilter ||
+                        !n.topics ||
+                        n.topics.map(t => t.toLowerCase()).includes(this.topicFilter.toLowerCase())
+                    );
+                },
+
                 init() {
+                    if (this.map) return; // Prevent double initialization
+
                     // Initialize map
                     this.initMap();
-                    // Initialize markdown converter
-                    this.converter = new showdown.Converter({ simpleLineBreaks: true });
                     // Load news data
                     this.loadNews();
                 },
 
                 initMap() {
                     // Initialize the map
+                    if (this.map) return; // Prevent re-initialization
+
                     this.map = L.map(this.$refs.map).setView([20, 0], 2);
 
                     // Add tile layer
@@ -260,6 +329,19 @@
                         spiderfyOnMaxZoom: true,
                         showCoverageOnHover: true,
                         zoomToBoundsOnClick: true
+                    });
+
+                    // Add event listener for cluster clicks
+                    this.markerClusterGroup.on('clusterclick', (a) => {
+                        // Get all markers in this cluster
+                        const childMarkers = a.layer.getAllChildMarkers();
+                        const newsIds = childMarkers.map(marker => marker.newsId);
+
+                        // Set selected news IDs to show in side panel
+                        this.selectNewsItems(newsIds);
+
+                        // Prevent default zoom behavior if needed
+                        // return false;
                     });
 
                     this.map.addLayer(this.markerClusterGroup);
@@ -295,22 +377,37 @@
 
                         if (geoData.type === 'Point') {
                             const [lng, lat] = geoData.coordinates;
-                            marker = L.marker([lat, lng], { icon: newsIcon })
-                                .bindPopup(this.createPopupContent(news), { maxWidth: 480 });
+                            marker = L.marker([lat, lng], { icon: newsIcon });
+
+                            // Store news ID with marker and add click handler
+                            marker.newsId = news.id;
+                            marker.on('click', () => this.selectNewsItems([news.id]));
+
                             this.markerClusterGroup.addLayer(marker);
+                            this.newsMarkers[news.id] = marker;
                         } else if (geoData.type === 'Feature' && geoData.geometry.type === 'Point') {
                             const [lng, lat] = geoData.geometry.coordinates;
-                            marker = L.marker([lat, lng], { icon: newsIcon })
-                                .bindPopup(this.createPopupContent(news), { maxWidth: 480 });
+                            marker = L.marker([lat, lng], { icon: newsIcon });
+
+                            // Store news ID with marker and add click handler
+                            marker.newsId = news.id;
+                            marker.on('click', () => this.selectNewsItems([news.id]));
+
                             this.markerClusterGroup.addLayer(marker);
+                            this.newsMarkers[news.id] = marker;
                         } else if (geoData.type === 'Polygon' || (geoData.type === 'Feature' && geoData.geometry.type === 'Polygon')) {
                             const layer = L.geoJSON(geoData);
                             const bounds = layer.getBounds();
                             const center = bounds.getCenter();
 
-                            marker = L.marker([center.lat, center.lng], { icon: newsIcon })
-                                .bindPopup(this.createPopupContent(news), { maxWidth: 480 });
+                            marker = L.marker([center.lat, center.lng], { icon: newsIcon });
+
+                            // Store news ID with marker and add click handler
+                            marker.newsId = news.id;
+                            marker.on('click', () => this.selectNewsItems([news.id]));
+
                             this.markerClusterGroup.addLayer(marker);
+                            this.newsMarkers[news.id] = marker;
 
                             // Also add the polygon shape
                             layer.setStyle({
@@ -338,18 +435,22 @@
                     });
                 },
 
-                createPopupContent(news) {
-                    const date = this.formatDate(news.content_date);
-                    return `
-                        <div class="news-popup">
-                            <div class="news-title"><a href="https://reuters.com${news.link}" target="_blank">${news.title}</a></div>
-                            <div class="news-summary">${news.summary}</div>
-                            <div class="news-meta">
-                                <strong>Date:</strong> ${date}<br>
-                                <strong>Location:</strong> ${news.location}
-                            </div>
-                        </div>
-                    `;
+                // Method to set selected news items
+                selectNewsItems(newsIds) {
+                    this.selectedNewsIds = newsIds;
+
+                    // Scroll to top of side panel
+                    this.$el.querySelector('#side').scrollTop = 0;
+                },
+
+                // Clear selection and show all news
+                clearSelection() {
+                    this.selectedNewsIds = [];
+                },
+
+                setTopicFilter(topic) {
+                    this.topicFilter = topic;
+                    this.clearSelection(); // Clear selection when filter changes
                 },
 
                 formatDate(dateString) {
