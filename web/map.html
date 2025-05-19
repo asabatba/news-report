@@ -372,7 +372,7 @@
                         this.newsItems = data.items;
 
                         this.search = new fzf.Fzf(this.newsItems, {
-                            selector: (item) => `${item.title} (${item.topics.join(', ')}) ${item.summary} ${item.location}`,
+                            selector: (item) => `${item.title} (${(item.topics ?? []).join(', ')}) ${item.summary} ${item.location}`,
                             // sortBy: (a, b) => a.title.localeCompare(b.title)
                         });
 
