@@ -1,0 +1,30 @@
+@import url('https://fonts.googleapis.com/css2?family=Domine:wght@400..700&family=Lora:ital,wght@0,400..700;1,400..700&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&display=swap');
+
+html {
+    font-family: Domine, serif; /* Added serif as a generic fallback */
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-family: Lora, serif; /* Added serif as a generic fallback */
+}
+
+/* Basic error styling if not covered by Sakura */
+.error {
+    color: #c62828; /* From map.html, consider standardizing */
+    background: #ffebee; /* From map.html */
+    padding: 10px 20px; /* From map.html */
+    border-radius: 4px; /* From map.html */
+    margin: 10px 0;
+}
+
+/* Basic loading styling if not covered by Sakura */
+.loading {
+    color: #666; /* From map.html */
+    font-size: 1.2em;
+    margin: 10px 0;
+}
